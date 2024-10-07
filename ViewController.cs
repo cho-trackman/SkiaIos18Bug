@@ -1,3 +1,4 @@
+using CoreText;
 using SkiaSharp;
 using SkiaSharp.Views.iOS;
 
@@ -7,7 +8,8 @@ public class ViewController : UIViewController
 {
     private readonly SKCanvasView _canvasView = new();
     private readonly UILabel _label = new();
-    private readonly UIImageView _imageView = new();
+    private readonly UIImageView _imageViewCg = new();
+    private readonly UIImageView _imageViewCt = new();
     private SKTypeface? _typeface;
 
     public override void ViewDidLoad()
@@ -33,11 +35,17 @@ public class ViewController : UIViewController
         _label.Font = UIFont.FromName(_typeface.FamilyName, 40);
         _label.Text = $"UILabel: 单° ({_typeface!.FamilyName})";
         
-        _imageView.Image = CoreGraphicsText($"CoreGraphics: 单° ({_typeface!.FamilyName})", _label.Font);
-        _imageView.TranslatesAutoresizingMaskIntoConstraints = false;
-        Add(_imageView);
-        _imageView.TopAnchor.ConstraintEqualTo(_label.BottomAnchor).Active = true;
-        _imageView.LeftAnchor.ConstraintEqualTo(_label.LeftAnchor).Active = true;
+        _imageViewCg.Image = CoreGraphics($"CoreGraphics: 单° ({_typeface!.FamilyName})", _label.Font);
+        _imageViewCg.TranslatesAutoresizingMaskIntoConstraints = false;
+        Add(_imageViewCg);
+        _imageViewCg.TopAnchor.ConstraintEqualTo(_label.BottomAnchor).Active = true;
+        _imageViewCg.LeftAnchor.ConstraintEqualTo(_label.LeftAnchor).Active = true;
+        
+        _imageViewCt.Image = CoreText($"CoreText: 单° ({_typeface!.FamilyName})", _label.Font);
+        _imageViewCt.TranslatesAutoresizingMaskIntoConstraints = false;
+        Add(_imageViewCt);
+        _imageViewCt.TopAnchor.ConstraintEqualTo(_imageViewCg.BottomAnchor).Active = true;
+        _imageViewCt.LeftAnchor.ConstraintEqualTo(_label.LeftAnchor).Active = true;
     }
     
     private void OnPainting(object? sender, SKPaintSurfaceEventArgs e)
@@ -62,7 +70,7 @@ public class ViewController : UIViewController
         canvas.DrawText($"Skia: 单° ({_typeface!.FamilyName})", 60, 160 + 80, textPaint);
     }
 
-    private static UIImage CoreGraphicsText(string text, UIFont font)
+    private static UIImage CoreGraphics(string text, UIFont font)
     {
         var str = new NSString(text);
         var strAttr = new UIStringAttributes
@@ -71,10 +79,7 @@ public class ViewController : UIViewController
         };
 
         var expectedTextSize = str.GetSizeUsingAttributes(strAttr);
-
-        var width = Math.Ceiling(expectedTextSize.Width);
-        var height = Math.Ceiling(expectedTextSize.Height);
-        var size = new CGSize(width, height);
+        var size = new CGSize(expectedTextSize.Width, expectedTextSize.Height);
 
         var renderer = new UIGraphicsImageRenderer(size, new UIGraphicsImageRendererFormat
         {
@@ -86,10 +91,38 @@ public class ViewController : UIViewController
         {
             using var context = imageContext.CGContext;
             context.SetFillColor(UIColor.Black.CGColor);
-            var fontTopPosition =
-                Math.Round((height - expectedTextSize.Height) / 2.0f, MidpointRounding.AwayFromZero);
-            var textPoint = new CGPoint(0, fontTopPosition);
-            str.DrawString(textPoint, strAttr);
+            str.DrawString(CGPoint.Empty, strAttr);
+        });
+    }
+    
+    private static UIImage CoreText(string text, UIFont font)
+    {
+        var str = new NSString(text);
+        var strAttr = new CTStringAttributes
+        {
+            ForegroundColorFromContext = true,
+            Font = new CTFont(font.FontDescriptor.PostscriptName, font.PointSize)
+        };
+        var attributedString = new NSAttributedString(str, strAttr);
+        
+        var size = new CGSize(attributedString.Size.Width, attributedString.Size.Height);
+        var textPos = size.Height - (size.Height - strAttr.Font.CapHeightMetric) / 2f;
+        var renderer = new UIGraphicsImageRenderer(size, new UIGraphicsImageRendererFormat
+        {
+            Opaque = false,
+            Scale = UIScreen.MainScreen.Scale
+        });
+
+        return renderer.CreateImage(imageContext =>
+        {
+            using var context = imageContext.CGContext;
+            context.ScaleCTM(1, -1);
+            
+            context.SetFillColor(UIColor.Black.CGColor);
+            context.TranslateCTM(0, -textPos);
+
+            using var textLine = new CTLine(attributedString);
+            textLine.Draw(context);
         });
     }
 }
