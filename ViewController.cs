@@ -7,6 +7,7 @@ public class ViewController : UIViewController
 {
     private readonly SKCanvasView _canvasView = new();
     private readonly UILabel _label = new();
+    private readonly UIImageView _imageView = new();
     private SKTypeface? _typeface;
 
     public override void ViewDidLoad()
@@ -31,6 +32,12 @@ public class ViewController : UIViewController
         _label.TextColor = UIColor.Black;
         _label.Font = UIFont.FromName(_typeface.FamilyName, 40);
         _label.Text = $"UILabel: 单° ({_typeface!.FamilyName})";
+        
+        _imageView.Image = CoreGraphicsText($"CoreGraphics: 单° ({_typeface!.FamilyName})", _label.Font);
+        _imageView.TranslatesAutoresizingMaskIntoConstraints = false;
+        Add(_imageView);
+        _imageView.TopAnchor.ConstraintEqualTo(_label.BottomAnchor).Active = true;
+        _imageView.LeftAnchor.ConstraintEqualTo(_label.LeftAnchor).Active = true;
     }
     
     private void OnPainting(object? sender, SKPaintSurfaceEventArgs e)
@@ -53,5 +60,36 @@ public class ViewController : UIViewController
         };
         // draw the text (from the baseline)
         canvas.DrawText($"Skia: 单° ({_typeface!.FamilyName})", 60, 160 + 80, textPaint);
+    }
+
+    private static UIImage CoreGraphicsText(string text, UIFont font)
+    {
+        var str = new NSString(text);
+        var strAttr = new UIStringAttributes
+        {
+            Font = font
+        };
+
+        var expectedTextSize = str.GetSizeUsingAttributes(strAttr);
+
+        var width = Math.Ceiling(expectedTextSize.Width);
+        var height = Math.Ceiling(expectedTextSize.Height);
+        var size = new CGSize(width, height);
+
+        var renderer = new UIGraphicsImageRenderer(size, new UIGraphicsImageRendererFormat
+        {
+            Opaque = false,
+            Scale = UIScreen.MainScreen.Scale
+        });
+
+        return renderer.CreateImage(imageContext =>
+        {
+            using var context = imageContext.CGContext;
+            context.SetFillColor(UIColor.Black.CGColor);
+            var fontTopPosition =
+                Math.Round((height - expectedTextSize.Height) / 2.0f, MidpointRounding.AwayFromZero);
+            var textPoint = new CGPoint(0, fontTopPosition);
+            str.DrawString(textPoint, strAttr);
+        });
     }
 }
